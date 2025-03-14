@@ -15,8 +15,8 @@
 #define DT  23                                                
 #define SCK 22 
 #define SERVO_PIN 26
-#define SSID = "****";
-#define PASS = "********"; 
+#define SSID "****"
+#define PASS "********"
 
 
 HX711 scale;
@@ -87,7 +87,7 @@ void setup() {
   servoMotor.setPeriodHertz(50);
   servoMotor.attach(SERVO_PIN);
   servoMotor.write(0);
-  WiFi.begin(sSID, PASS);
+  WiFi.begin(SSID, PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -154,6 +154,7 @@ void loop() {
       }
     }
   } 
+  old_pos = pos;
   device_found = false;
   BLEScanResults *foundDevices = pBLEScan->start(scanTime, false);
   for (int i = 0; i < foundDevices->getCount(); i++)
@@ -169,12 +170,25 @@ void loop() {
   }
     else{
     pos = 0;
-    //отправить вес остатка на сервер
   }
   }
   Serial.print("pos = ");
   Serial.println(pos);
   servoMotor.write(pos);
+  if (old_pos == 180 && pos == 0){
+    if (http.begin(client, "http://192.168.0.103:8000/activity/eating_activity")){
+      http.addHeader("accept", "application/json");
+      http.addHeader("Content-Type", "application/json");
+      StaticJsonDocument<1> TempDataJSON;
+      TempDataJSON["feeder_name"] = "FEEDER_001";
+      TempDataJSON["collar_name"] = collar;
+      String TempDataString;
+      serializeJson(TempDataJSON, TempDataString);
+      int httpResponseCode = http.POST(TempDataString);
+      String result = http.getString();
+    }
+    http.end();
+  }
   pBLEScan->clearResults();
 
 }
@@ -190,16 +204,8 @@ int check_size(){
   return int(ounces);
 }
 
-void feed() {
-  int tmp_fa = size;
-  while (tmp_fa>0){
-    delay(1);
-    anti_jam();
-    tmp_fa--;
-  }
-}
 
-void anti_jam() {
+void feed() {
   if (!stepper.tick()) {
     dir = !dir;
     stepper.setTarget(dir ? -90 : 90, RELATIVE);
@@ -215,3 +221,4 @@ int get_hour(int hour, int timezone){
     return hour_in_timezone - 24;
   }
 }
+
